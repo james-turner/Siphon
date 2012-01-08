@@ -111,15 +111,22 @@ class SiphonTest extends PHPUnit_Framework_TestCase {
 
         $isRun = false;
 
-        $this->siphon->before_siphon = function($body)use(&$isRun){
+        $stream = fopen('php://memory', 'rw');
+        fwrite($stream, "some string");
+
+        $test =& $this;
+
+        $this->siphon->after_siphon = function($body)use(&$isRun, $test){
             $isRun = true;
+            $test->assertEquals($body, "some string");
+            $body = "haha i changed you!!";
         };
 
-        $this->siphon->siphon('php://memory');
+        $return = $this->siphon->siphon($stream);
 
+        $this->assertEquals("haha i changed you!!", $return);
         $this->assertTrue($isRun);
 
     }
-
 
 }

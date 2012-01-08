@@ -22,24 +22,36 @@ class Siphon {
      */
     public $listener;
 
+    /**
+     * Siphon constructor
+     * Allows passing
+     */
     public function __construct(){
-
+        // Initialise the listener.
         $this->listener = function(){};
 
-        if(func_num_args() == 1){ // more than the current arg list allows
+        if(func_num_args() > 0){ // more than the current arg list allows
         	$args = func_get_args();
-        	$block = array_pop($args);
+        	$block = array_pop($args); // last arg only is allowed to be a block.
         	if(is_callable($block)){
-        		$this->exec($block, array($this));
+        		$this->yield($block, array($this)); // yield!!
         	}
         }
     }
 
+    /**
+     *
+     * @throws Exception
+     * @param $stream
+     * @param null|Closure $block
+     * @return mixed
+     */
     public function siphon($stream, $block = null){
 
         // before
-        $this->exec($this->before_siphon, array(&$stream));
+        $this->yield($this->before_siphon, array(&$stream));
 
+        // If we got a string then convert it to a stream and provide the listener.
         if($from_string = is_string($stream)){
             $ctx = stream_context_create(null, array('notification' => $this->listener));
             $stream = fopen($stream, 'rb', true, $ctx);
@@ -47,26 +59,39 @@ class Siphon {
         // rewind streams not at the start, throws a warning for streams that cannot be rewound.
         ftell($stream) === 0 || rewind($stream);
 
+        // Initialise the body of the response.
         $body = "";
         while(!feof($stream)){
-            if(false === ($body .= fread($stream, 8192))){
+            if(false === ($chunk = fread($stream, 8192))){
                 throw new Exception("Failed to read from stream.");
             }
-            if(empty($chunk)) break;
+            $body .= $chunk;
+            // if(empty($body)) break; <- might resolve an issue with write only streams not exiting.
         }
         // close the stream
         !$from_string || fclose($stream);
 
         // after
-        $this->exec($this->after_siphon, array(&$body));
+        $this->yield($this->after_siphon, array(&$body));
 
         // If we received a block then exec it and alter the response.
         is_callable($block) || ($block = function()use($body){return $body;});
 
-        return $this->exec($block, array(&$body));
+        return $this->yield($block, array(&$body));
     }
-    
-    private function exec(&$block, $args = array()){
+
+    /**
+     * Execute a block of code (Closure) with the provided
+     * arguments. Catches and throws any exceptions.
+     * If block is not callable it utilises a basic lambda
+     * instead.
+     * @static
+     * @throws Exception
+     * @param \Closure $block
+     * @param array $args
+     * @return mixed
+     */
+    private function yield(&$block, $args = array()){
     	// handle block exceptions nicely.
     	try {
     		is_callable($block) || ($block = function(){});
