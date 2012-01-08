@@ -66,7 +66,7 @@ class Siphon {
                 throw new Exception("Failed to read from stream.");
             }
             $body .= $chunk;
-            // if(empty($body)) break; <- might resolve an issue with write only streams not exiting.
+            if(empty($body)) break;
         }
         // close the stream
         !$from_string || fclose($stream);
